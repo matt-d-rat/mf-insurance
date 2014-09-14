@@ -14,7 +14,7 @@ disableSerialization;
 _player = player;
 
 //_playerUID = getPlayerUID _player; // Use this for real releases.
-_playerUID = _player getVariable ["playerUID", 0]; // TEMP for DayZ Epoch Live Edior
+_playerUID = _player getVariable ["playerUID", 0]; // TEMP for DayZ Epoch Live Editor
 
 _vehicleObj = MF_Insurance_Current_Item select 0 select 0;
 _vehicleName = MF_Insurance_Current_Item select 0 select 1;
@@ -29,18 +29,24 @@ _insuranceCurrencyClassname = _insuranceAmount select 1;
 _insuranceFrequency = _insurancePolicy select 2;
 
 _dialog = findDisplay MF_Insurance_iddDialog; // Get a reference to the display
-
 _dialog closeDisplay 9000;
 
 // Check if the player has enough money in their inventory to insure the vehicle
 if( ({_x == _insuranceCurrencyClassname} count (magazines _player)) >= _insuranceCurrencyQty) then {
-	private ["r_interrupt", "_animState", "r_doLoop", "_started", "_finished", "_isMedic"];
+	private ["r_interrupt", "_animState", "r_doLoop", "_started", "_finished", "_isMedic", "_isInsuring"];
+
+	_isInsuring = _vehicleObj getVariable["MF_Insurance_PlayerIsInsuring", 0];
 
 	if(DZE_ActionInProgress) exitWith { 
-		cutText ["Purchasing insurance for a vehicle already in progress." , "PLAIN DOWN"]; 
+		cutText["Purchasing insurance for a vehicle already in progress." , "PLAIN DOWN"]; 
+	};
+
+	if(_isInsuring == 1) exitWith {
+		cutText[ format["%1 is currently being insured by another player.", _vehicleName], "PLAIN DOWN"];
 	};
 
 	DZE_ActionInProgress = true;
+	_vehicleObj setVariable ["MF_Insurance_PlayerIsInsuring",1,true];
 
 	[1,1] call dayz_HungerThirst;
 	_player playActionNow "Medic";
@@ -84,6 +90,7 @@ if( ({_x == _insuranceCurrencyClassname} count (magazines _player)) >= _insuranc
 		cutText [(localize "str_epoch_player_106") , "PLAIN DOWN"];
 		
 		DZE_ActionInProgress = false;
+		_vehicleObj setVariable ["MF_Insurance_PlayerIsInsuring",0,true];
 	};
 
 	if (_finished) then {
@@ -131,6 +138,7 @@ if( ({_x == _insuranceCurrencyClassname} count (magazines _player)) >= _insuranc
 		_result = nil;
 		
 		cutText [format["Successfully insured %1 for %2 %3.", _vehicleName, _insuranceCurrencyQty, _insuranceCurrencyClassname], "PLAIN DOWN"]; 
+		_vehicleObj setVariable ["MF_Insurance_PlayerIsInsuring",0,true];
 	};
 } 
 else {
@@ -139,9 +147,5 @@ else {
 
 DZE_ActionInProgress = false;
 
-//TODO:
-//  - Prevent two players insuring the same vehicle at the same time. First in wins.
-
-
-// This is how to return the number of days passed since the last payment timestamp in SQL:
-// SELECT DATEDIFF(CURRENT_TIMESTAMP,`Datestamp`) AS TotalDaysPassed FROM `mf_insurance_payments` ORDER BY `PaymentID` DESC LIMIT 1;
+// NOTE: This is how to return the number of days passed since the last payment timestamp in SQL:
+// SELECT DATEDIFF(CURRENT_TIMESTAMP,`Datestamp`) AS TotalDaysPassed FROM `mf_insurance_payments` WHERE `InsuredID` = '%1' ORDER BY `PaymentID` DESC LIMIT 1;
