@@ -7,29 +7,33 @@
  * MIT Licence
  **/
 
-private ["_player", "_playerUID", "_vehicleObj", "_vehicleName", "_dialog", "_insurancePolicy", "_insuranceCost", "_insuranceQty", "_insuranceItemClass"];
+private ["_player", "_playerUID", "_vehicleObj", "_vehicleName", "_objectUID", "_characterID", "_dialog", "_insurancePolicy", "_insuranceVehicleClassname", "_insuranceAmount", "_insuranceCurrencyQty", "_insuranceCurrencyClassname", "_insuranceFrequency"];
 
 disableSerialization;
 
 _player = player;
 
 //_playerUID = getPlayerUID _player; // Use this for real releases.
-_playerUID = _player getVariable ["playerUID", "0"]; // TEMP for DayZ Epoch Live Edior
+_playerUID = _player getVariable ["playerUID", 0]; // TEMP for DayZ Epoch Live Edior
 
 _vehicleObj = MF_Insurance_Current_Item select 0 select 0;
 _vehicleName = MF_Insurance_Current_Item select 0 select 1;
-_insurancePolicy = _vehicleObj call MF_Insurance_Vehcile_Get_Insurance_Policy;
+_objectUID = _vehicleObj getVariable["ObjectUID", 0];
+_characterID = _vehicleObj getVariable["CharacterID", 0];
 
-_insuranceCost = _insurancePolicy select 1;
-_insuranceQty = _insuranceCost select 0;
-_insuranceItemClass = _insuranceCost select 1;
+_insurancePolicy = _vehicleObj call MF_Insurance_Vehcile_Get_Insurance_Policy;
+_insuranceVehicleClassname = _insurancePolicy select 0;
+_insuranceAmount = _insurancePolicy select 1;
+_insuranceCurrencyQty = _insuranceAmount select 0;
+_insuranceCurrencyClassname = _insuranceAmount select 1;
+_insuranceFrequency = _insurancePolicy select 2;
 
 _dialog = findDisplay MF_Insurance_iddDialog; // Get a reference to the display
 
 _dialog closeDisplay 9000;
 
 // Check if the player has enough money in their inventory to insure the vehicle
-if( ({_x == _insuranceItemClass} count (magazines _player)) >= _insuranceQty) then {
+if( ({_x == _insuranceCurrencyClassname} count (magazines _player)) >= _insuranceCurrencyQty) then {
 	private ["r_interrupt", "_animState", "r_doLoop", "_started", "_finished", "_isMedic"];
 
 	if(DZE_ActionInProgress) exitWith { 
@@ -83,43 +87,61 @@ if( ({_x == _insuranceItemClass} count (magazines _player)) >= _insuranceQty) th
 	};
 
 	if (_finished) then {
-		private ["_result", "_key", "_existingPolicy"];
-
-		_result = nil;
+		private ["_key", "_result", "_policyID", "_insuredID"];
 		_key = nil;
 
 		// Take the payment from the player
-		//_result = [_player, _insuranceItemClass, _insuranceQty] call BIS_fnc_invRemove;
+		[_player, _insuranceCurrencyClassname, _insuranceCurrencyQty] call BIS_fnc_invRemove;
 		
 		//TODO: calculate change to give
-		//[[[_insuranceItemClass,_insuranceQty]],1] call epoch_returnChange;
+		//[[[_insuranceCurrencyClassname,_insuranceCurrencyQty]],1] call epoch_returnChange;
 		
-		// Check if the player already has a policy in the database
-		_key = format ["CHILD:999:SELECT `PolicyID` FROM `mf_insurance_policy` WHERE `PlayerUID`` = ?:[%1]:", parseNumber(_playerUID)];
-		diag_log ("HIVE: READ: Get Existing Policy for player: " + str(_key) );
-		_existingPolicy = _key call server_hiveReadWrite;
-		diag_log ("HIVE: READ: Get Existing Policy for player result: " + str(_existingPolicy) );
+		// Crate a new policy in the database if the player hasn't previously created an insurance policy before
+		_key = format ["INSERT IGNORE INTO `mf_insurance_policy`(`PlayerUID`) VALUES ('%1');", _playerUID];
+		_result = _key call server_hiveReadWrite;
+		diag_log ("HIVE: WRITE: Create player policy: " + str(_key) );
 		_key = nil;
+		_result = nil;
 
-		cutText[ format["result = %1", _existingPolicy], "PLAIN DOWN"];
+		// Get the player's policy ID from the database
+		_key = format ["SELECT `PolicyID` FROM `mf_insurance_policy` WHERE `PlayerUID` = '%1';", _playerUID];
+		_result = _key call server_hiveReadWrite;
+		diag_log ("HIVE: READ: Get player policy ID: " + str(_key) );
+		diag_log ("HIVE: RESULT: Get player policy ID: " + str(_result) );
 
-		//cutText [format["Successfully insured %1 for %2 %3.", _vehicleName, _insuranceQty, _insuranceItemClass], "PLAIN DOWN"]; 
+		_policyID = parseNumber(_result select 0 select 0 select 0);
+		_key = nil;
+		_result = nil;
+
+		// Create a new insurance record for the vehicle being insured
+		_key = format ["INSERT IGNORE INTO `mf_insurance_policy_data` (`PolicyID`, `ObjectUID`, `Classname`, `CharacterID`, `InsuranceAmount`, `Frequency`) VALUES ('%1', '%2', '%3', '%4', '%5', '%6'); SELECT `InsuredID` FROM `mf_insurance_policy_data` WHERE `PolicyID` = '%1' AND `ObjectUID` = '%2';", _policyID, _objectUID, _insuranceVehicleClassname, _characterID, _insuranceAmount, _insuranceFrequency];
+		_result = _key call server_hiveReadWrite;
+		diag_log ("HIVE: WRITE: Create vehicle insurance record: " + str(_key) );
+		diag_log ("HIVE: RESULT: Create vehicle insurance InsuredID: " + str(_result) );
+
+		_insuredID = parseNumber(_result select 0 select 0 select 0);
+		_key = nil;
+		_result = nil;
+
+		// Add a payment record to the payments table
+		_key = format ["INSERT INTO `mf_insurance_payments` (`InsuredID`, `PaymentClassname`, `PaymentQty`) VALUES ('%1', '%2', '%3');", _insuredID, _insuranceCurrencyClassname, _insuranceCurrencyQty];
+		_result = _key call server_hiveReadWrite;
+		diag_log ("HIVE: WRITE: Create payment record: " + str(_key) );
+		_key = nil;
+		_result = nil;
+		
+		cutText [format["Successfully insured %1 for %2 %3.", _vehicleName, _insuranceCurrencyQty, _insuranceCurrencyClassname], "PLAIN DOWN"]; 
 	};
 } 
 else {
-	cutText[format["%1 %2 is required to insure %3.", _insuranceQty, _insuranceItemClass, _vehicleName], "PLAIN DOWN"];
+	cutText[format["%1 %2 is required to insure %3.", _insuranceCurrencyQty, _insuranceCurrencyClassname, _vehicleName], "PLAIN DOWN"];
 };
 
 DZE_ActionInProgress = false;
 
 //TODO:
-//	- Write the result to the DB.
-// 	- Verify the result wrote correctly to the DB
 //  - Prevent two players insuring the same vehicle at the same time. First in wins.
 
 
-// Example SQL
-// _key = format ["CHILD:999: select id from building WHERE class_name= '%1' AND id > ?:[0]:", _classname];
-// diag_log ("HIVE: WRITE: ChangedOwner "+ str(_key));
-// _result = _key call server_hiveReadWrite;
-// diag_log ("HIVE: WRITE: ChangedOwner result "+ str(_result));
+// This is how to return the number of days passed since the last payment timestamp in SQL:
+// SELECT DATEDIFF(CURRENT_TIMESTAMP,`Datestamp`) AS TotalDaysPassed FROM `mf_insurance_payments` ORDER BY `PaymentID` DESC LIMIT 1;
