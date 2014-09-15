@@ -30,7 +30,8 @@ MF_Insurance_Policy_Config_Array =
 	private ["_config"];
 
 	_config = [
-		["UH1Y_DZ", [2, "ItemBriefcase100oz"], 2]
+		["UH1Y_DZ", [2, "ItemBriefcase100oz"], 2],
+		["policecar", [1, "ItemBriefcase100oz"], 1]
 	];
 
 	_config

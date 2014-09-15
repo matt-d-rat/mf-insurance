@@ -8,9 +8,15 @@
  * MIT Licence
  **/
 
-private ["_dialog", "_vehicleFilters"];
+private ["_dialog", "_vehicleFilters", "_playerUID"];
 
 disableSerialization;
+
+_player = player;
+
+//_playerUID = getPlayerUID _player; // Use this for real releases.
+_playerUID = _player getVariable ["playerUID", 0]; // TEMP for DayZ Epoch Live Editor
+
 
 _vehicleFilters = [
 	["AllVehicles", "All"],
@@ -101,12 +107,36 @@ MF_Insurance_Get_Nearby_Owned_Vehicles =
 	_nearestOwnedVehicles
 };
 
+MF_Insurance_Get_Player_Insured_Vehicles =
+{
+	private ["_key", "_result", "_insuredVehiclesArray"];
+	// Get the player's policy ID from the database
+	_key = format ["SELECT mf_insurance_policy_data.ObjectUID, mf_insurance_policy_data.Classname, mf_insurance_policy_data.CharacterID, mf_insurance_policy_data.InsuranceAmount, mf_insurance_policy_data.Frequency FROM `mf_insurance_policy_data` LEFT JOIN `mf_insurance_policy` ON mf_insurance_policy_data.PolicyID = mf_insurance_policy.PolicyID WHERE mf_insurance_policy.PlayerUID = '%1';", _playerUID];
+	_result = _key call server_hiveReadWrite;
+	diag_log ("HIVE: READ: Get player insured vehicles: " + str(_key) );
+	diag_log ("HIVE: RESULT: Get player insured vehicles: " + str(_result) );
+	
+	_insuredVehiclesArray = _result select 0;
+	_key = nil;
+	_result = nil;
+
+	_insuredVehiclesArray
+};
+
 MF_Insurance_Get_Vehicle_Data = 
 {
 	private ["_vehicle", "_cfgVehicles", "_vehicleName", "_vehicleImage", "_vehicleInfo", "_insuranceInfo"];
 	_vehicle = _this select 0;
-	_cfgVehicles = configFile >> "cfgVehicles" >> TypeOf(_vehicle);
-	
+
+	switch(typeName _vehicle) do {
+		case "OBJECT": {
+			_cfgVehicles = configFile >> "cfgVehicles" >> TypeOf(_vehicle);
+		};
+		case "STRING": {
+			_cfgVehicles = configFile >> "cfgVehicles" >> _vehicle
+		};
+	};
+
 	_vehicleName = getText(_cfgVehicles >> "displayName");
 	_vehicleImage = getText(_cfgVehicles >> "picture");
 	_vehicleInfo = [_vehicle, _vehicleName, _vehicleImage];
@@ -166,23 +196,46 @@ MF_Insurance_Hide_Vehicle_Data_Panel =
 // >>>>>>>>>>>>>>>>> Initiate the dialog <<<<<<<<<<<<<<<<<<<
 
 if( isNil "mfInsuranceVehicleList" ) then {
-	private ["_vehicleData", "_nearbyOwnedVehicles"];
-
-	mfInsuranceVehicleList = [];
-	_nearbyOwnedVehicles = call MF_Insurance_Get_Nearby_Owned_Vehicles;
+	private ["_vehicleData", "_nearbyOwnedVehicles", "_playerInsuredVehicles", "_playerInsuredVehiclesObjectUIDs"];
 
 	titleText ["Loading MF-Insurance dialog...", "PLAIN DOWN"];
-	titleFadeOut 2;
 
-	// Loop over the nearby owned vehicles and add them to the vehicle list
+	mfInsuranceVehicleList = [];
+	_playerInsuredVehiclesObjectUIDs = [];
+
+	_nearbyOwnedVehicles = call MF_Insurance_Get_Nearby_Owned_Vehicles;
+	_playerInsuredVehicles = call MF_Insurance_Get_Player_Insured_Vehicles;
+
+	// Get all of the insured vehicles ObjectUID's
 	{
-		if( alive _x && player != _x ) then {
+		private["_objectUID"];
+
+		_objectUID = _x select 0;
+		_playerInsuredVehiclesObjectUIDs set [count(_playerInsuredVehiclesObjectUIDs), _objectUID];
+	} forEach _playerInsuredVehicles;
+
+	//Insured vehicles and add them to the vehicle list
+	{
+		if( typeName _x == "ARRAY") then {
+			_vehicleData = [(_x select 1)] call MF_Insurance_Get_Vehicle_Data;
+			mfInsuranceVehicleList set [(count mfInsuranceVehicleList), _vehicleData];
+		};
+	} forEach _playerInsuredVehicles;
+
+	//Nearby owned vehicles, filtering out already insured vehicles, and add them to the vehicle list
+	{
+		private["_objectUID"];
+
+		_objectUID = _x getVariable["ObjectUID", 0];
+
+		if( alive _x && player != _x && !(_objectUID in _playerInsuredVehiclesObjectUIDs) ) then {
 			_vehicleData = [_x] call MF_Insurance_Get_Vehicle_Data;
 			mfInsuranceVehicleList set [(count mfInsuranceVehicleList), _vehicleData];
 		};
 	} forEach _nearbyOwnedVehicles;
 };
 
+titleFadeOut 2;	
 createDialog "MFInsuranceDialog";
 
 _dialog = findDisplay MF_Insurance_iddDialog; // Get a reference to the display
