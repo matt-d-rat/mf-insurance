@@ -48,12 +48,21 @@ MF_Insurance_idcBtnInsure = 1704;
 // Functions
 MF_Insurance_Vehcile_Get_Insurance_Policy =
 {
-	private ["_vehicle", "_result"];
+	private ["_vehicle", "_result", "_vehicleType"];
 	_vehicle = _this;
 	_result = [];
 
+	switch(typeName _vehicle) do {
+		case "OBJECT": {
+			_vehicleType = typeOf _vehicle;
+		};
+		case "STRING": {
+			_vehicleType = _vehicle;
+		};
+	};
+
 	{
-		if( typeOf _vehicle == (_x select 0) ) exitWith {
+		if( _vehicleType == (_x select 0) ) exitWith {
 			_result = _x;
 		};
 	} forEach call MF_Insurance_Policy_Config_Array;
@@ -127,6 +136,7 @@ MF_Insurance_Get_Vehicle_Data =
 {
 	private ["_vehicle", "_cfgVehicles", "_vehicleName", "_vehicleImage", "_vehicleInfo", "_insuranceInfo"];
 	_vehicle = _this select 0;
+	_insuranceInfo = _this select 1;
 
 	switch(typeName _vehicle) do {
 		case "OBJECT": {
@@ -140,7 +150,6 @@ MF_Insurance_Get_Vehicle_Data =
 	_vehicleName = getText(_cfgVehicles >> "displayName");
 	_vehicleImage = getText(_cfgVehicles >> "picture");
 	_vehicleInfo = [_vehicle, _vehicleName, _vehicleImage];
-	_insuranceInfo = []; // TODO: populate this with data from the database.
 
 	[_vehicleInfo, _insuranceInfo]
 };
@@ -155,12 +164,21 @@ MF_Insurance_Load_Vehicle_List =
 
 	// Populate the dialog list with data
 	{
-		private ["_vehicle", "_vehicleName", "_index"];
+		private ["_vehicle", "_vehicleName", "_insuranceData", "_colour", "_index"];
 		_vehicle = _x select 0 select 0;
 		_vehicleName = _x select 0 select 1;
+		_insuranceData = _x select 1;
+
+		// If the vehicle is insured, suffix the name shown in the list
+		if( (count _insuranceData) > 0) then {
+			_colour = [0,255,0,1];
+		} else {
+			_colour = [255,255,255,1];
+		};
 
 		if( _vehicle isKindOf _type ) then {
 			_index = lbAdd [MF_Insurance_idcDialogList, format["%1", _vehicleName]];
+			 		 lbSetColor [MF_Insurance_idcDialogList, _index, _colour];
 		};
 		
 	} forEach mfInsuranceVehicleList;
@@ -217,7 +235,12 @@ if( isNil "mfInsuranceVehicleList" ) then {
 	//Insured vehicles and add them to the vehicle list
 	{
 		if( typeName _x == "ARRAY") then {
-			_vehicleData = [(_x select 1)] call MF_Insurance_Get_Vehicle_Data;
+			private["_insuranceData"];
+
+			// _x = [ObjectUID, Classname, CharacterID, InsuranceAmount, Frequency]
+			_insuranceData = [(_x select 0), (_x select 2), (_x select 3), (_x select 4)];
+			_vehicleData = [(_x select 1), _insuranceData] call MF_Insurance_Get_Vehicle_Data;
+
 			mfInsuranceVehicleList set [(count mfInsuranceVehicleList), _vehicleData];
 		};
 	} forEach _playerInsuredVehicles;
@@ -229,7 +252,7 @@ if( isNil "mfInsuranceVehicleList" ) then {
 		_objectUID = _x getVariable["ObjectUID", 0];
 
 		if( alive _x && player != _x && !(_objectUID in _playerInsuredVehiclesObjectUIDs) ) then {
-			_vehicleData = [_x] call MF_Insurance_Get_Vehicle_Data;
+			_vehicleData = [_x, []] call MF_Insurance_Get_Vehicle_Data;
 			mfInsuranceVehicleList set [(count mfInsuranceVehicleList), _vehicleData];
 		};
 	} forEach _nearbyOwnedVehicles;
