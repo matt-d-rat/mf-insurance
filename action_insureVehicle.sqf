@@ -146,6 +146,3 @@ else {
 };
 
 DZE_ActionInProgress = false;
-
-// NOTE: This is how to return the number of days passed since the last payment timestamp in SQL:
-// SELECT DATEDIFF(CURRENT_TIMESTAMP,`Datestamp`) AS TotalDaysPassed FROM `mf_insurance_payments` WHERE `InsuredID` = '%1' ORDER BY `PaymentID` DESC LIMIT 1;

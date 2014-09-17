@@ -78,7 +78,7 @@ _getLabelCostText =
 	if( ( count _insuranceData ) == 0 ) then {
 		_insuranceCost = [] call _getInsuranceCostFromConfig;
 	} else {
-		_insuranceCost = [100, "ItemBriefcase10oz"]; // Get from insuranceData
+		_insuranceCost = call compile (_insuranceData select 2); // Convert string to array
 	};
 
 	// TODO, get the suffix 10oz gold bar
@@ -91,12 +91,12 @@ _getLabelCostText =
 _getLabelFrequencyText =
 {
 	private ["_frequencies", "_labelSuffix"];
-	_frequencies = ["Daily", "Weekly", "Monthly", "Yearly"];
+	_frequencies = call MF_Insurance_Frequency_Array;
 
 	if( (count _insuranceData == 0) && (count _insurancePolicy > 0) ) then {
-		_labelSuffix = _frequencies select (_insurancePolicy select 2);
+		_labelSuffix = _frequencies select (_insurancePolicy select 2) select 0;
 	} else {
-		_labelSuffix = "TODO"; // TODO pull from insurnaceData
+		_labelSuffix = _frequencies select (parseNumber(_insuranceData select 3)) select 0;
 	};
 
 	format["%1: %2", _labelPrefixFrequency, _labelSuffix]
@@ -104,22 +104,26 @@ _getLabelFrequencyText =
 
 _getLabelBalanceText =
 {
-	private ["_labelSuffix", "_balance", "_displayName", "_color", "_currency"];
+	private ["_labelSuffix", "_balance", "_displayName", "_color", "_insuranceAmount", "_qty", "_currency", "_frequncyIndex"];
 
-	_balance = [100, "ItemBriefcase10oz"]; //TODO: Logic from insuranceData
+	_insuranceAmount = call compile (_insuranceData select 2);
+	_frequncyIndex = (_insuranceData select 3);
+	_qty = _insuranceAmount select 0;
+	_displayName = getText(configFile >> "CfgMagazines" >> (_insuranceAmount select 1) >> "displayName");
+
+	_balance = [_qty, _frequncyIndex] call MF_Insurance_Calculate_Balance;
 	
 	// TODO: get the suffix 10oz gold bar
-	_displayName = getText(configFile >> "CfgMagazines" >> (_balance select 1) >> "displayName");
 	
 	switch true do {
 		// Positive balance
-		case( (_balance select 0) > 0 ): { 
+		case( _balance > 0 ): { 
 			_color = "#00ff00";
 			_currency = _displayName;
 		};
 
 		// Negative balance
-		case( (_balance select 0) < 0 ): { 
+		case( _balance < 0 ): { 
 			_color = "#ff0000"; 
 			_currency = _displayName;
 		};
@@ -131,7 +135,7 @@ _getLabelBalanceText =
 		}; 							
 	};
 
-	_labelSuffix = format["<t color='%3'>%1 %2</t>", (_balance select 0), _currency, _color];
+	_labelSuffix = format["<t color='%3'>%1 %2</t>", _balance, _currency, _color];
 
 	format["%1: %2", _labelPrefixBalance, _labelSuffix]
 };

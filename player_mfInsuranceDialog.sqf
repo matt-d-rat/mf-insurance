@@ -132,6 +132,28 @@ MF_Insurance_Get_Player_Insured_Vehicles =
 	_insuredVehiclesArray
 };
 
+MF_Insurance_Calculate_Balance =
+{
+	private ["_key", "_result", "_frequencies", "_balance", "_qty", "_frequencyIndex", "_unitString"];
+	_frequencies = call MF_Insurance_Frequency_Array;
+	_qty = _this select 0;
+	_frequencyIndex = parseNumber(_this select 1);
+
+	// Map the _frequencyIndex to the MySQL enum for the TIMESTAMPDIFF function
+	_unitString = _frequencies select _frequencyIndex select 1;
+
+	// Calculate the time difference that has passed by the frequency of the insurance policy
+
+	// NOTE: This is how to return the number of days passed since the last payment timestamp in SQL:
+	// SELECT mf_insurance_policy_data.ObjectUID, TIMESTAMPDIFF(DAY, CURRENT_TIMESTAMP, mf_insurance_payments.Datestamp) AS TotalUnitsPassed FROM `mf_insurance_payments` LEFT JOIN `mf_insurance_policy_data` ON mf_insurance_payments.InsuredID = mf_insurance_policy_data.InsuredID WHERE `ObjectUID` = '1148251136120267' ORDER BY `PaymentID` DESC LIMIT 1;
+
+	// Will need to figure out when the very first payment was made in the given unit and sum the qty until now
+
+	// Temp until DB works.
+	_balance = 0;
+	_balance
+};
+
 MF_Insurance_Get_Vehicle_Data = 
 {
 	private ["_vehicle", "_cfgVehicles", "_vehicleName", "_vehicleImage", "_vehicleInfo", "_insuranceInfo"];
