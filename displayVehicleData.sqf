@@ -104,15 +104,10 @@ _getLabelFrequencyText =
 
 _getLabelBalanceText =
 {
-	private ["_labelSuffix", "_balance", "_displayName", "_color", "_objectUID", "_insuranceAmount", "_qty", "_currency", "_frequncyIndex"];
+	private ["_labelSuffix", "_balance", "_displayName", "_color", "_currency"];
 
-	_objectUID = _insuranceData select 0;
-	_insuranceAmount = call compile (_insuranceData select 2);
-	_frequncyIndex = (_insuranceData select 3);
-	_qty = _insuranceAmount select 0;
+	_balance = _this;
 	_displayName = getText(configFile >> "CfgMagazines" >> (_insuranceAmount select 1) >> "displayName");
-
-	_balance = [_qty, _objectUID, _frequncyIndex] call MF_Insurance_Calculate_Balance;
 	
 	// TODO: get the suffix 10oz gold bar
 	
@@ -175,10 +170,17 @@ _notInsurableVehicleDisplay =
 
 _insuredVehicleDisplay =
 {
-	private ["_owesPayment"];
+	private ["_objectUID", "_balance", "_owesPayment", "_vehicleIsAlive"];
 
-	//TODO: get from insurance data, temp to test.
-	_owesPayment = true;
+	_objectUID = _this select 0;
+	_balance = _this select 1;
+
+	if( _balance < 0 ) then {
+		_owesPayment = true;
+	} else {
+		_owesPayment = false;
+	};
+	
 	_vehicleIsAlive = true;
 	
 	ctrlEnable [MF_Insurance_idcBtnInsure, false];
@@ -190,7 +192,7 @@ _insuredVehicleDisplay =
 	(_dialog displayCtrl MF_Insurance_idcVehicleInfo_Status) ctrlSetStructuredText parseText ([true] call _getLabelStatusText);
 	ctrlSetText [MF_Insurance_idcVehicleInfo_Cost, [] call _getLabelCostText];
 	ctrlSetText [MF_Insurance_idcVehicleInfo_PaymentFrequency, [] call _getLabelFrequencyText];
-	(_dialog displayCtrl MF_Insurance_idcVehicleInfo_Balance) ctrlSetStructuredText parseText ([] call _getLabelBalanceText);
+	(_dialog displayCtrl MF_Insurance_idcVehicleInfo_Balance) ctrlSetStructuredText parseText (_balance call _getLabelBalanceText);
 
 	ctrlShow [MF_Insurance_idcVehicleInfo_Status, true];
 	ctrlShow [MF_Insurance_idcVehicleInfo_Cost, true];
@@ -213,7 +215,15 @@ ctrlSetText [MF_Insurance_idcVehicleImage,  format["%1", _vehicleImage]];
 switch(true) do {
 	// Insured Vehicle
 	case (count _insuranceData > 0 ): {
-		[] call _insuredVehicleDisplay;
+		private ["_objectUID", "_PaymentQty", "_frequncyIndex", "_insuranceAmount", "_balance"];
+
+		_objectUID = _insuranceData select 0;
+		_insuranceAmount = call compile (_insuranceData select 2);
+		_frequncyIndex = (_insuranceData select 3);
+		_PaymentQty = _insuranceAmount select 0;
+		_balance = [_PaymentQty, _objectUID, _frequncyIndex] call MF_Insurance_Calculate_Balance;
+
+		[_objectUID, _balance] call _insuredVehicleDisplay;
 	};
 	// Uninsured Vehicle
 	case( (count _insuranceData == 0) && (count _insurancePolicy > 0) ): {
