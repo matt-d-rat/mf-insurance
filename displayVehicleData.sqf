@@ -181,8 +181,12 @@ _insuredVehicleDisplay =
 		_owesPayment = false;
 	};
 	
-	_vehicleIsAlive = true;
-	
+	if( (_objectUID call MF_Insurance_Is_Vehicle_Alive) == 0) then {
+		_vehicleIsAlive = false;
+	} else {
+		_vehicleIsAlive = true;
+	};
+
 	ctrlEnable [MF_Insurance_idcBtnInsure, false];
 	ctrlEnable [MF_Insurance_idcBtnPay, true];
 

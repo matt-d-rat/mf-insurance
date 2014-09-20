@@ -175,14 +175,32 @@ MF_Insurance_Calculate_Balance =
 	", _unitString, _qty, _objectUID];
 
 	_result = _key call server_hiveReadWrite;
-	diag_log ("HIVE: READ: Get player insured vehicles: " + str(_key) );
-	diag_log ("HIVE: RESULT: Get player insured vehicles: " + str(_result) );
+	diag_log ("HIVE: READ: Calculate balance for insured vehicle: " + str(_key) );
+	diag_log ("HIVE: RESULT: Calculate balance for insured vehicle: " + str(_result) );
 
 	_balance = parseNumber(_result select 0 select 0 select 5);
 	_key = nil;
 	_result = nil;
 
 	_balance
+};
+
+MF_Insurance_Is_Vehicle_Alive =
+{
+	private ["_key", "_result", "_objectUID", "_isAlive"];
+
+	_objectUID = _this;
+
+	_key = format["SELECT `Damage`, ( CASE WHEN (`Damage` < 1) THEN 1 ELSE 0 END ) AS IsAlive FROM `object_data` WHERE `ObjectUID` = '%1';", _objectUID];
+	_result = _key call server_hiveReadWrite;
+	diag_log ("HIVE: READ: Is Vehicle Alive: " + str(_key) );
+	diag_log ("HIVE: RESULT:Is Vehicle Alive: " + str(_result) );
+
+	_isAlive = parseNumber(_result select 0 select 0 select 1);
+	_key = nil;
+	_result = nil;
+
+	_isAlive
 };
 
 MF_Insurance_Get_Vehicle_Data = 
