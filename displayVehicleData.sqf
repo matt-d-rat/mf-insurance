@@ -104,14 +104,15 @@ _getLabelFrequencyText =
 
 _getLabelBalanceText =
 {
-	private ["_labelSuffix", "_balance", "_displayName", "_color", "_insuranceAmount", "_qty", "_currency", "_frequncyIndex"];
+	private ["_labelSuffix", "_balance", "_displayName", "_color", "_objectUID", "_insuranceAmount", "_qty", "_currency", "_frequncyIndex"];
 
+	_objectUID = _insuranceData select 0;
 	_insuranceAmount = call compile (_insuranceData select 2);
 	_frequncyIndex = (_insuranceData select 3);
 	_qty = _insuranceAmount select 0;
 	_displayName = getText(configFile >> "CfgMagazines" >> (_insuranceAmount select 1) >> "displayName");
 
-	_balance = [_qty, _frequncyIndex] call MF_Insurance_Calculate_Balance;
+	_balance = [_qty, _objectUID, _frequncyIndex] call MF_Insurance_Calculate_Balance;
 	
 	// TODO: get the suffix 10oz gold bar
 	

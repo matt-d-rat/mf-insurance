@@ -134,23 +134,54 @@ MF_Insurance_Get_Player_Insured_Vehicles =
 
 MF_Insurance_Calculate_Balance =
 {
-	private ["_key", "_result", "_frequencies", "_balance", "_qty", "_frequencyIndex", "_unitString"];
+	private ["_key", "_result", "_frequencies", "_balance", "_qty", "_objectUID", "_frequencyIndex", "_unitString"];
 	_frequencies = call MF_Insurance_Frequency_Array;
 	_qty = _this select 0;
-	_frequencyIndex = parseNumber(_this select 1);
+	_objectUID = _this select 1;
+	_frequencyIndex = parseNumber(_this select 2);
 
 	// Map the _frequencyIndex to the MySQL enum for the TIMESTAMPDIFF function
 	_unitString = _frequencies select _frequencyIndex select 1;
 
-	// Calculate the time difference that has passed by the frequency of the insurance policy
+	_key = format ["
+		SELECT 
+		mf_insurance_policy_data.ObjectUID,
+		mf_insurance_policy_data.InsuredID,
+		(
+			SELECT SUM(mf_insurance_payments.PaymentQty) 
+			FROM mf_insurance_payments
+		    WHERE mf_insurance_payments.InsuredID = mf_insurance_policy_data.InsuredID
+		) 
+		AS TotalPaidByPlayerToDate,
+		TIMESTAMPDIFF(%1, mf_insurance_payments.Datestamp, CURRENT_TIMESTAMP) AS TotalUnitsPassed,
+		(
+			SELECT TotalUnitsPassed * %2 AS TotalToDate
+			FROM mf_insurance_payments
+			WHERE mf_insurance_payments.InsuredID = mf_insurance_policy_data.InsuredID
+			LIMIT 1
+		) AS RequiredTotalToDate,
+		(
+			SELECT CAST( (TotalPaidByPlayerToDate - RequiredTotalToDate) AS SIGNED )
+			FROM mf_insurance_payments
+			WHERE mf_insurance_payments.InsuredID = mf_insurance_policy_data.InsuredID
+			LIMIT 1
+		) AS Balance
+		FROM `mf_insurance_payments`
+		LEFT JOIN `mf_insurance_policy_data` 
+		ON mf_insurance_payments.InsuredID = mf_insurance_policy_data.InsuredID
+		WHERE `ObjectUID` = '%3'
+		ORDER BY `PaymentID` 
+		ASC LIMIT 1;
+	", _unitString, _qty, _objectUID];
 
-	// NOTE: This is how to return the number of days passed since the last payment timestamp in SQL:
-	// SELECT mf_insurance_policy_data.ObjectUID, TIMESTAMPDIFF(DAY, CURRENT_TIMESTAMP, mf_insurance_payments.Datestamp) AS TotalUnitsPassed FROM `mf_insurance_payments` LEFT JOIN `mf_insurance_policy_data` ON mf_insurance_payments.InsuredID = mf_insurance_policy_data.InsuredID WHERE `ObjectUID` = '1148251136120267' ORDER BY `PaymentID` DESC LIMIT 1;
+	_result = _key call server_hiveReadWrite;
+	diag_log ("HIVE: READ: Get player insured vehicles: " + str(_key) );
+	diag_log ("HIVE: RESULT: Get player insured vehicles: " + str(_result) );
 
-	// Will need to figure out when the very first payment was made in the given unit and sum the qty until now
+	_balance = parseNumber(_result select 0 select 0 select 5);
+	_key = nil;
+	_result = nil;
 
-	// Temp until DB works.
-	_balance = 0;
 	_balance
 };
 
