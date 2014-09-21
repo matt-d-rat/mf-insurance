@@ -8,9 +8,15 @@
  * MIT Licence
  **/
 
-private ["_dialog", "_vehicleFilters"];
+private ["_dialog", "_vehicleFilters", "_playerUID"];
 
 disableSerialization;
+
+_player = player;
+
+//_playerUID = getPlayerUID _player; // Use this for real releases.
+_playerUID = _player getVariable ["playerUID", 0]; // TEMP for DayZ Epoch Live Editor
+
 
 _vehicleFilters = [
 	["AllVehicles", "All"],
@@ -42,12 +48,21 @@ MF_Insurance_idcBtnInsure = 1704;
 // Functions
 MF_Insurance_Vehcile_Get_Insurance_Policy =
 {
-	private ["_vehicle", "_result"];
+	private ["_vehicle", "_result", "_vehicleType"];
 	_vehicle = _this;
 	_result = [];
 
+	switch(typeName _vehicle) do {
+		case "OBJECT": {
+			_vehicleType = typeOf _vehicle;
+		};
+		case "STRING": {
+			_vehicleType = _vehicle;
+		};
+	};
+
 	{
-		if( typeOf _vehicle == (_x select 0) ) exitWith {
+		if( _vehicleType == (_x select 0) ) exitWith {
 			_result = _x;
 		};
 	} forEach call MF_Insurance_Policy_Config_Array;
@@ -101,16 +116,111 @@ MF_Insurance_Get_Nearby_Owned_Vehicles =
 	_nearestOwnedVehicles
 };
 
+MF_Insurance_Get_Player_Insured_Vehicles =
+{
+	private ["_key", "_result", "_insuredVehiclesArray"];
+	// Get the player's policy ID from the database
+	_key = format ["SELECT mf_insurance_policy_data.ObjectUID, mf_insurance_policy_data.Classname, mf_insurance_policy_data.CharacterID, mf_insurance_policy_data.InsuranceAmount, mf_insurance_policy_data.Frequency FROM `mf_insurance_policy_data` LEFT JOIN `mf_insurance_policy` ON mf_insurance_policy_data.PolicyID = mf_insurance_policy.PolicyID WHERE mf_insurance_policy.PlayerUID = '%1';", _playerUID];
+	_result = _key call server_hiveReadWrite;
+	diag_log ("HIVE: READ: Get player insured vehicles: " + str(_key) );
+	diag_log ("HIVE: RESULT: Get player insured vehicles: " + str(_result) );
+	
+	_insuredVehiclesArray = _result select 0;
+	_key = nil;
+	_result = nil;
+
+	_insuredVehiclesArray
+};
+
+MF_Insurance_Calculate_Balance =
+{
+	private ["_key", "_result", "_frequencies", "_balance", "_qty", "_objectUID", "_frequencyIndex", "_unitString"];
+	_frequencies = call MF_Insurance_Frequency_Array;
+	_qty = _this select 0;
+	_objectUID = _this select 1;
+	_frequencyIndex = parseNumber(_this select 2);
+
+	// Map the _frequencyIndex to the MySQL enum for the TIMESTAMPDIFF function
+	_unitString = _frequencies select _frequencyIndex select 1;
+
+	_key = format ["
+		SELECT 
+		mf_insurance_policy_data.ObjectUID,
+		mf_insurance_policy_data.InsuredID,
+		(
+			SELECT SUM(mf_insurance_payments.PaymentQty) 
+			FROM mf_insurance_payments
+		    WHERE mf_insurance_payments.InsuredID = mf_insurance_policy_data.InsuredID
+		) 
+		AS TotalPaidByPlayerToDate,
+		TIMESTAMPDIFF(%1, mf_insurance_payments.Datestamp, CURRENT_TIMESTAMP) AS TotalUnitsPassed,
+		(
+			SELECT TotalUnitsPassed * %2 AS TotalToDate
+			FROM mf_insurance_payments
+			WHERE mf_insurance_payments.InsuredID = mf_insurance_policy_data.InsuredID
+			LIMIT 1
+		) AS RequiredTotalToDate,
+		(
+			SELECT CAST( (TotalPaidByPlayerToDate - RequiredTotalToDate) AS SIGNED )
+			FROM mf_insurance_payments
+			WHERE mf_insurance_payments.InsuredID = mf_insurance_policy_data.InsuredID
+			LIMIT 1
+		) AS Balance
+		FROM `mf_insurance_payments`
+		LEFT JOIN `mf_insurance_policy_data` 
+		ON mf_insurance_payments.InsuredID = mf_insurance_policy_data.InsuredID
+		WHERE `ObjectUID` = '%3'
+		ORDER BY `PaymentID` 
+		ASC LIMIT 1;
+	", _unitString, _qty, _objectUID];
+
+	_result = _key call server_hiveReadWrite;
+	diag_log ("HIVE: READ: Calculate balance for insured vehicle: " + str(_key) );
+	diag_log ("HIVE: RESULT: Calculate balance for insured vehicle: " + str(_result) );
+
+	_balance = parseNumber(_result select 0 select 0 select 5);
+	_key = nil;
+	_result = nil;
+
+	_balance
+};
+
+MF_Insurance_Is_Vehicle_Alive =
+{
+	private ["_key", "_result", "_objectUID", "_isAlive"];
+
+	_objectUID = _this;
+
+	_key = format["SELECT `Damage`, ( CASE WHEN (`Damage` < 1) THEN 1 ELSE 0 END ) AS IsAlive FROM `object_data` WHERE `ObjectUID` = '%1';", _objectUID];
+	_result = _key call server_hiveReadWrite;
+	diag_log ("HIVE: READ: Is Vehicle Alive: " + str(_key) );
+	diag_log ("HIVE: RESULT:Is Vehicle Alive: " + str(_result) );
+
+	_isAlive = parseNumber(_result select 0 select 0 select 1);
+	_key = nil;
+	_result = nil;
+
+	_isAlive
+};
+
 MF_Insurance_Get_Vehicle_Data = 
 {
 	private ["_vehicle", "_cfgVehicles", "_vehicleName", "_vehicleImage", "_vehicleInfo", "_insuranceInfo"];
 	_vehicle = _this select 0;
-	_cfgVehicles = configFile >> "cfgVehicles" >> TypeOf(_vehicle);
-	
+	_insuranceInfo = _this select 1;
+
+	switch(typeName _vehicle) do {
+		case "OBJECT": {
+			_cfgVehicles = configFile >> "cfgVehicles" >> TypeOf(_vehicle);
+		};
+		case "STRING": {
+			_cfgVehicles = configFile >> "cfgVehicles" >> _vehicle
+		};
+	};
+
 	_vehicleName = getText(_cfgVehicles >> "displayName");
 	_vehicleImage = getText(_cfgVehicles >> "picture");
 	_vehicleInfo = [_vehicle, _vehicleName, _vehicleImage];
-	_insuranceInfo = []; // TODO: populate this with data from the database.
 
 	[_vehicleInfo, _insuranceInfo]
 };
@@ -125,12 +235,21 @@ MF_Insurance_Load_Vehicle_List =
 
 	// Populate the dialog list with data
 	{
-		private ["_vehicle", "_vehicleName", "_index"];
+		private ["_vehicle", "_vehicleName", "_insuranceData", "_colour", "_index"];
 		_vehicle = _x select 0 select 0;
 		_vehicleName = _x select 0 select 1;
+		_insuranceData = _x select 1;
+
+		// If the vehicle is insured, suffix the name shown in the list
+		if( (count _insuranceData) > 0) then {
+			_colour = [0,255,0,1];
+		} else {
+			_colour = [255,255,255,1];
+		};
 
 		if( _vehicle isKindOf _type ) then {
 			_index = lbAdd [MF_Insurance_idcDialogList, format["%1", _vehicleName]];
+			 		 lbSetColor [MF_Insurance_idcDialogList, _index, _colour];
 		};
 		
 	} forEach mfInsuranceVehicleList;
@@ -166,23 +285,51 @@ MF_Insurance_Hide_Vehicle_Data_Panel =
 // >>>>>>>>>>>>>>>>> Initiate the dialog <<<<<<<<<<<<<<<<<<<
 
 if( isNil "mfInsuranceVehicleList" ) then {
-	private ["_vehicleData", "_nearbyOwnedVehicles"];
-
-	mfInsuranceVehicleList = [];
-	_nearbyOwnedVehicles = call MF_Insurance_Get_Nearby_Owned_Vehicles;
+	private ["_vehicleData", "_nearbyOwnedVehicles", "_playerInsuredVehicles", "_playerInsuredVehiclesObjectUIDs"];
 
 	titleText ["Loading MF-Insurance dialog...", "PLAIN DOWN"];
-	titleFadeOut 2;
 
-	// Loop over the nearby owned vehicles and add them to the vehicle list
+	mfInsuranceVehicleList = [];
+	_playerInsuredVehiclesObjectUIDs = [];
+
+	_nearbyOwnedVehicles = call MF_Insurance_Get_Nearby_Owned_Vehicles;
+	_playerInsuredVehicles = call MF_Insurance_Get_Player_Insured_Vehicles;
+
+	// Get all of the insured vehicles ObjectUID's
 	{
-		if( alive _x && player != _x ) then {
-			_vehicleData = [_x] call MF_Insurance_Get_Vehicle_Data;
+		private["_objectUID"];
+
+		_objectUID = _x select 0;
+		_playerInsuredVehiclesObjectUIDs set [count(_playerInsuredVehiclesObjectUIDs), _objectUID];
+	} forEach _playerInsuredVehicles;
+
+	//Insured vehicles and add them to the vehicle list
+	{
+		if( typeName _x == "ARRAY") then {
+			private["_insuranceData"];
+
+			// _x = [ObjectUID, Classname, CharacterID, InsuranceAmount, Frequency]
+			_insuranceData = [(_x select 0), (_x select 2), (_x select 3), (_x select 4)];
+			_vehicleData = [(_x select 1), _insuranceData] call MF_Insurance_Get_Vehicle_Data;
+
+			mfInsuranceVehicleList set [(count mfInsuranceVehicleList), _vehicleData];
+		};
+	} forEach _playerInsuredVehicles;
+
+	//Nearby owned vehicles, filtering out already insured vehicles, and add them to the vehicle list
+	{
+		private["_objectUID"];
+
+		_objectUID = _x getVariable["ObjectUID", 0];
+
+		if( alive _x && player != _x && !(_objectUID in _playerInsuredVehiclesObjectUIDs) ) then {
+			_vehicleData = [_x, []] call MF_Insurance_Get_Vehicle_Data;
 			mfInsuranceVehicleList set [(count mfInsuranceVehicleList), _vehicleData];
 		};
 	} forEach _nearbyOwnedVehicles;
 };
 
+titleFadeOut 2;	
 createDialog "MFInsuranceDialog";
 
 _dialog = findDisplay MF_Insurance_iddDialog; // Get a reference to the display

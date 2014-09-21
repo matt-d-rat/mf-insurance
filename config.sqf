@@ -30,8 +30,42 @@ MF_Insurance_Policy_Config_Array =
 	private ["_config"];
 
 	_config = [
-		["UH1Y_DZ", [2, "ItemBriefcase100oz"], 2]
+		["UH1Y_DZ", [2, "ItemBriefcase100oz"], 2],
+		["policecar", [1, "ItemBriefcase100oz"], 1]
 	];
 
 	_config
+};
+
+/**
+ * Returns an array of arrays, representing the frequencies of which a policy
+ * bill will incur. Each array is represented as ["Display Name", "MySQL Enum"]
+ * where the MySQL Enum is a unit expected by the MySQL TIMESTAMPDIFF function:
+ *		FRAC_SECOND,
+ *		SECOND,
+ *		MINUTE,
+ *		HOUR,
+ *		DAY,
+ *		WEEK,
+ *		MONTH,
+ *		QUARTER,
+ *		YEAR
+ *
+ * It is not recommended that change the default configuration below. If you do it
+ * is at your own risk, and it is advised you do not use a frequency less than DAY.
+ * No support will be provided to anyone who changes the default configuration.
+ **/
+MF_Insurance_Frequency_Array = 
+{
+	private ["_frequencies"];
+
+	_frequencies = [
+		["Daily", "DAY"],
+		["Weekly", "WEEK"],
+		["Monthly", "MONTH"],
+		["Quarterly", "QUARTER"],
+		["Yearly", "YEAR"]
+	];
+
+	_frequencies
 };

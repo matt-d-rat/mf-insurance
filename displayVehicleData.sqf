@@ -78,7 +78,7 @@ _getLabelCostText =
 	if( ( count _insuranceData ) == 0 ) then {
 		_insuranceCost = [] call _getInsuranceCostFromConfig;
 	} else {
-		_insuranceCost = [100, "ItemBriefcase10oz"]; // Get from insuranceData
+		_insuranceCost = call compile (_insuranceData select 2); // Convert string to array
 	};
 
 	// TODO, get the suffix 10oz gold bar
@@ -91,12 +91,12 @@ _getLabelCostText =
 _getLabelFrequencyText =
 {
 	private ["_frequencies", "_labelSuffix"];
-	_frequencies = ["Daily", "Weekly", "Monthly", "Yearly"];
+	_frequencies = call MF_Insurance_Frequency_Array;
 
 	if( (count _insuranceData == 0) && (count _insurancePolicy > 0) ) then {
-		_labelSuffix = _frequencies select (_insurancePolicy select 2);
+		_labelSuffix = _frequencies select (_insurancePolicy select 2) select 0;
 	} else {
-		_labelSuffix = "TODO"; // TODO pull from insurnaceData
+		_labelSuffix = _frequencies select (parseNumber(_insuranceData select 3)) select 0;
 	};
 
 	format["%1: %2", _labelPrefixFrequency, _labelSuffix]
@@ -106,20 +106,20 @@ _getLabelBalanceText =
 {
 	private ["_labelSuffix", "_balance", "_displayName", "_color", "_currency"];
 
-	_balance = [100, "ItemBriefcase10oz"]; //TODO: Logic from insuranceData
+	_balance = _this;
+	_displayName = getText(configFile >> "CfgMagazines" >> (_insuranceAmount select 1) >> "displayName");
 	
 	// TODO: get the suffix 10oz gold bar
-	_displayName = getText(configFile >> "CfgMagazines" >> (_balance select 1) >> "displayName");
 	
 	switch true do {
 		// Positive balance
-		case( (_balance select 0) > 0 ): { 
+		case( _balance > 0 ): { 
 			_color = "#00ff00";
 			_currency = _displayName;
 		};
 
 		// Negative balance
-		case( (_balance select 0) < 0 ): { 
+		case( _balance < 0 ): { 
 			_color = "#ff0000"; 
 			_currency = _displayName;
 		};
@@ -131,7 +131,7 @@ _getLabelBalanceText =
 		}; 							
 	};
 
-	_labelSuffix = format["<t color='%3'>%1 %2</t>", (_balance select 0), _currency, _color];
+	_labelSuffix = format["<t color='%3'>%1 %2</t>", _balance, _currency, _color];
 
 	format["%1: %2", _labelPrefixBalance, _labelSuffix]
 };
@@ -170,12 +170,23 @@ _notInsurableVehicleDisplay =
 
 _insuredVehicleDisplay =
 {
-	private ["_owesPayment"];
+	private ["_objectUID", "_balance", "_owesPayment", "_vehicleIsAlive"];
 
-	//TODO: get from insurance data, temp to test.
-	_owesPayment = true;
-	_vehicleIsAlive = true;
+	_objectUID = _this select 0;
+	_balance = _this select 1;
+
+	if( _balance < 0 ) then {
+		_owesPayment = true;
+	} else {
+		_owesPayment = false;
+	};
 	
+	if( (_objectUID call MF_Insurance_Is_Vehicle_Alive) == 0) then {
+		_vehicleIsAlive = false;
+	} else {
+		_vehicleIsAlive = true;
+	};
+
 	ctrlEnable [MF_Insurance_idcBtnInsure, false];
 	ctrlEnable [MF_Insurance_idcBtnPay, true];
 
@@ -185,7 +196,7 @@ _insuredVehicleDisplay =
 	(_dialog displayCtrl MF_Insurance_idcVehicleInfo_Status) ctrlSetStructuredText parseText ([true] call _getLabelStatusText);
 	ctrlSetText [MF_Insurance_idcVehicleInfo_Cost, [] call _getLabelCostText];
 	ctrlSetText [MF_Insurance_idcVehicleInfo_PaymentFrequency, [] call _getLabelFrequencyText];
-	(_dialog displayCtrl MF_Insurance_idcVehicleInfo_Balance) ctrlSetStructuredText parseText ([] call _getLabelBalanceText);
+	(_dialog displayCtrl MF_Insurance_idcVehicleInfo_Balance) ctrlSetStructuredText parseText (_balance call _getLabelBalanceText);
 
 	ctrlShow [MF_Insurance_idcVehicleInfo_Status, true];
 	ctrlShow [MF_Insurance_idcVehicleInfo_Cost, true];
@@ -208,7 +219,15 @@ ctrlSetText [MF_Insurance_idcVehicleImage,  format["%1", _vehicleImage]];
 switch(true) do {
 	// Insured Vehicle
 	case (count _insuranceData > 0 ): {
-		[] call _insuredVehicleDisplay;
+		private ["_objectUID", "_PaymentQty", "_frequncyIndex", "_insuranceAmount", "_balance"];
+
+		_objectUID = _insuranceData select 0;
+		_insuranceAmount = call compile (_insuranceData select 2);
+		_frequncyIndex = (_insuranceData select 3);
+		_PaymentQty = _insuranceAmount select 0;
+		_balance = [_PaymentQty, _objectUID, _frequncyIndex] call MF_Insurance_Calculate_Balance;
+
+		[_objectUID, _balance] call _insuredVehicleDisplay;
 	};
 	// Uninsured Vehicle
 	case( (count _insuranceData == 0) && (count _insurancePolicy > 0) ): {
