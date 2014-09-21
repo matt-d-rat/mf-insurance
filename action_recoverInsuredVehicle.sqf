@@ -88,6 +88,8 @@ waitUntil {!isNil "_hasKey"};
 // TODO: Animation and close dialog
 
 if (_hasKey and _isValidKey) then {
+	private ["_newObjectUID"];
+
 	// Place a vehicle spawn marker (local)
 	_spawnMarker = createVehicle ["Sign_arrow_down_large_EP1", _spawnLocation, [], 0, "CAN_COLLIDE"];
 	_spawnLocation = (getPosATL _spawnMarker);
@@ -96,13 +98,23 @@ if (_hasKey and _isValidKey) then {
 	PVDZE_veh_Publish2 = [_spawnMarker, [ _direction, _spawnLocation], _vehicleClassname, false, _vehicleKey, _player];
 	publicVariableServer  "PVDZE_veh_Publish2";
 
+	PVDZE_veh_Init = nil; // Dirty hack
 	PVDZE_veh_Publish2 spawn server_publishVeh2; // TEMP: DayZ Epoch Live Editor Code, remove for release
+	
+	// This feels dirty, possibly only needed for local dev. Swap for addPublicVariableEventHandler
+	waitUntil {!isNil "PVDZE_veh_Init"};
+	_newObjectUID = PVDZE_veh_Init getVariable["ObjectUID", 0];
+
+	// Update the policy data table with the new ObjectUID
+	_key = format ["UPDATE `mf_insurance_policy_data` SET ObjectUID = '%1' WHERE ObjectUID = '%2';", _newObjectUID, _originalObjectUID];
+	_result = _key call server_hiveReadWrite;
+	diag_log ("HIVE: WRITE: Set Recovered Vehicle ObjectUID: " + str(_key) );
+	diag_log ("HIVE: RESULT: Set Recovered Vehicle ObjectUID: " + str(_result) );
+	_key = nil;
+	_result = nil;
+
 	_player reveal _spawnMarker;
-
 	cutText[format["Successfully recovered %1. %2 added to your toolbelt.", _vehicleName, _vehicleKey],"PLAIN DOWN"];
-
-	// TODO: Get the new ObjectUID for the spawned vehicle and update the db insurance records with the new uid.
-	// Pull from the database based upon spawnLocation, Classname and CharacterID
 } else {
 	cutText [ format["Cannot recover %1. Key cannot be added to your toolbelt because it is full.", _vehicleName], "PLAIN DOWN"];
 };
