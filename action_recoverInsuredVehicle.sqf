@@ -9,7 +9,7 @@
 
 private ["_player", "_playerUID", "_vehicleClassname", "_vehicleName", "_originalObjectUID", 
 		 "_originalKeyID", "_direction", "_helipad", "_spawnInWater", "_spawnLocation", "_spawnMarker",
-		 "_vehicleKey", "_isValidKey", "_hasKey", "_playerInventory", "_playerBackpack"];
+		 "_vehicleKey", "_isValidKey", "_hasKey", "_playerInventory", "_playerBackpack", "_dialog"];
 
 disableSerialization;
 
@@ -28,6 +28,9 @@ _playerBackpack = ((getWeaponCargo unitbackpack _player) select 0);
 
 _direction = round(random 360);
 _helipad = nearestObjects [player, ["HeliHCivil","HeliHempty"], 100];
+
+_dialog = findDisplay MF_Insurance_iddDialog; // Get a reference to the display
+_dialog closeDisplay 9000;
 
 if(_vehicleClassname isKindOf "Ship") then {
 	_spawnInWater = 2;
@@ -88,33 +91,89 @@ waitUntil {!isNil "_hasKey"};
 // TODO: Animation and close dialog
 
 if (_hasKey and _isValidKey) then {
-	private ["_newObjectUID"];
+	private ["_animState", "_started", "_finished", "_isMedic"];
 
-	// Place a vehicle spawn marker (local)
-	_spawnMarker = createVehicle ["Sign_arrow_down_large_EP1", _spawnLocation, [], 0, "CAN_COLLIDE"];
-	_spawnLocation = (getPosATL _spawnMarker);
+	if(DZE_ActionInProgress) exitWith { 
+		cutText["Purchasing insurance for a vehicle already in progress." , "PLAIN DOWN"]; 
+	};
 
-	// Spawn the vehicle at the marker position
-	PVDZE_veh_Publish2 = [_spawnMarker, [ _direction, _spawnLocation], _vehicleClassname, false, _vehicleKey, _player];
-	publicVariableServer  "PVDZE_veh_Publish2";
+	DZE_ActionInProgress = true;
 
-	PVDZE_veh_Init = nil; // Dirty hack
-	PVDZE_veh_Publish2 spawn server_publishVeh2; // TEMP: DayZ Epoch Live Editor Code, remove for release
-	
-	// This feels dirty, possibly only needed for local dev. Swap for addPublicVariableEventHandler
-	waitUntil {!isNil "PVDZE_veh_Init"};
-	_newObjectUID = PVDZE_veh_Init getVariable["ObjectUID", 0];
+	[1,1] call dayz_HungerThirst;
+	_player playActionNow "Medic";
 
-	// Update the policy data table with the new ObjectUID
-	_key = format ["UPDATE `mf_insurance_policy_data` SET ObjectUID = '%1' WHERE ObjectUID = '%2';", _newObjectUID, _originalObjectUID];
-	_result = _key call server_hiveReadWrite;
-	diag_log ("HIVE: WRITE: Set Recovered Vehicle ObjectUID: " + str(_key) );
-	diag_log ("HIVE: RESULT: Set Recovered Vehicle ObjectUID: " + str(_result) );
-	_key = nil;
-	_result = nil;
+	r_interrupt = false;
+	_animState = animationState _player;
+	r_doLoop = true;
+	_started = false;
+	_finished = false;
 
-	_player reveal _spawnMarker;
-	cutText[format["Successfully recovered %1. %2 added to your toolbelt.", _vehicleName, _vehicleKey],"PLAIN DOWN"];
-} else {
+	while {r_doLoop} do {
+		_animState = animationState _player;
+		_isMedic = ["medic",_animState] call fnc_inString;
+
+		if (_isMedic) then {
+			_started = true;
+		};
+		
+		if (_started and !_isMedic) then {
+			r_doLoop = false;
+			_finished = true;
+		};
+
+		if (r_interrupt) then {
+			r_doLoop = false;
+		};
+
+		sleep 0.1;
+	};
+
+	r_doLoop = false;
+
+	if (!_finished) exitWith {
+		r_interrupt = false;
+
+		if (vehicle _player == _player) then {
+			[objNull, _player, rSwitchMove,""] call RE;
+			_player playActionNow "stop";
+		};
+		
+		cutText [(localize "str_epoch_player_106") , "PLAIN DOWN"];
+		DZE_ActionInProgress = false;
+	};
+
+	if (_finished) then {
+		private ["_newObjectUID"];
+
+		// Place a vehicle spawn marker (local)
+		_spawnMarker = createVehicle ["Sign_arrow_down_large_EP1", _spawnLocation, [], 0, "CAN_COLLIDE"];
+		_spawnLocation = (getPosATL _spawnMarker);
+
+		// Spawn the vehicle at the marker position
+		PVDZE_veh_Publish2 = [_spawnMarker, [ _direction, _spawnLocation], _vehicleClassname, false, _vehicleKey, _player];
+		publicVariableServer  "PVDZE_veh_Publish2";
+
+		PVDZE_veh_Init = nil; // Dirty hack
+		PVDZE_veh_Publish2 spawn server_publishVeh2; // TEMP: DayZ Epoch Live Editor Code, remove for release
+
+		// This feels dirty, possibly only needed for local dev. Swap for addPublicVariableEventHandler
+		waitUntil {!isNil "PVDZE_veh_Init"};
+		_newObjectUID = PVDZE_veh_Init getVariable["ObjectUID", 0];
+
+		// Update the policy data table with the new ObjectUID
+		_key = format ["UPDATE `mf_insurance_policy_data` SET ObjectUID = '%1' WHERE ObjectUID = '%2';", _newObjectUID, _originalObjectUID];
+		_result = _key call server_hiveReadWrite;
+		diag_log ("HIVE: WRITE: Set Recovered Vehicle ObjectUID: " + str(_key) );
+		diag_log ("HIVE: RESULT: Set Recovered Vehicle ObjectUID: " + str(_result) );
+		_key = nil;
+		_result = nil;
+
+		_player reveal _spawnMarker;
+		cutText[format["Successfully recovered %1. %2 added to your toolbelt.", _vehicleName, _vehicleKey],"PLAIN DOWN"];
+	};
+} 
+else {
 	cutText [ format["Cannot recover %1. Key cannot be added to your toolbelt because it is full.", _vehicleName], "PLAIN DOWN"];
 };
+
+DZE_ActionInProgress = false;
