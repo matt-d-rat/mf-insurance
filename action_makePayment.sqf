@@ -7,7 +7,7 @@
  * MIT Licence
  **/
 
-private ["_player", "_playerUID", "_vehicleClassname", "_vehicleName", "_insuranceData", "_insuranceCurrencyClassname", "_insuredID", "_paymentQty", "_dialog"];
+private ["_player", "_vehicleClassname", "_vehicleName", "_insuranceData", "_insuranceCurrencyClassname", "_insuredID", "_paymentQty", "_dialog"];
 
 disableSerialization;
 
