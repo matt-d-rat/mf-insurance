@@ -120,7 +120,7 @@ MF_Insurance_Get_Player_Insured_Vehicles =
 {
 	private ["_key", "_result", "_insuredVehiclesArray"];
 	// Get the player's policy ID from the database
-	_key = format ["SELECT mf_insurance_policy_data.ObjectUID, mf_insurance_policy_data.Classname, mf_insurance_policy_data.CharacterID, mf_insurance_policy_data.InsuranceAmount, mf_insurance_policy_data.Frequency FROM `mf_insurance_policy_data` LEFT JOIN `mf_insurance_policy` ON mf_insurance_policy_data.PolicyID = mf_insurance_policy.PolicyID WHERE mf_insurance_policy.PlayerUID = '%1';", _playerUID];
+	_key = format ["SELECT mf_insurance_policy_data.ObjectUID, mf_insurance_policy_data.Classname, mf_insurance_policy_data.CharacterID, mf_insurance_policy_data.InsuranceAmount, mf_insurance_policy_data.Frequency, mf_insurance_policy_data.InsuredID FROM `mf_insurance_policy_data` LEFT JOIN `mf_insurance_policy` ON mf_insurance_policy_data.PolicyID = mf_insurance_policy.PolicyID WHERE mf_insurance_policy.PlayerUID = '%1';", _playerUID];
 	_result = _key call server_hiveReadWrite;
 	diag_log ("HIVE: READ: Get player insured vehicles: " + str(_key) );
 	diag_log ("HIVE: RESULT: Get player insured vehicles: " + str(_result) );
@@ -308,8 +308,8 @@ if( isNil "mfInsuranceVehicleList" ) then {
 		if( typeName _x == "ARRAY") then {
 			private["_insuranceData"];
 
-			// _x = [ObjectUID, Classname, CharacterID, InsuranceAmount, Frequency]
-			_insuranceData = [(_x select 0), (_x select 2), (_x select 3), (_x select 4)];
+			// _x = [ObjectUID, Classname, CharacterID, InsuranceAmount, Frequency, InsuredID]
+			_insuranceData = [(_x select 0), (_x select 2), (_x select 3), (_x select 4), (_x select 5)];
 			_vehicleData = [(_x select 1), _insuranceData] call MF_Insurance_Get_Vehicle_Data;
 
 			mfInsuranceVehicleList set [(count mfInsuranceVehicleList), _vehicleData];

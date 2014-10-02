@@ -88,13 +88,11 @@ if(_vehicleKey in (_playerInventory + _playerBackpack) ) then {
 
 waitUntil {!isNil "_hasKey"};
 
-// TODO: Animation and close dialog
-
 if (_hasKey and _isValidKey) then {
 	private ["_animState", "_started", "_finished", "_isMedic"];
 
 	if(DZE_ActionInProgress) exitWith { 
-		cutText["Purchasing insurance for a vehicle already in progress." , "PLAIN DOWN"]; 
+		cutText["Recovering insured vehicle already in progress." , "PLAIN DOWN"]; 
 	};
 
 	DZE_ActionInProgress = true;

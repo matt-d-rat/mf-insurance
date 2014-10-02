@@ -207,6 +207,7 @@ _insuredVehicleDisplay =
 	ctrlShow [MF_Insurance_idcBtnPay, true];
 
 	(_dialog displayCtrl MF_Insurance_idcBtnRecover) ctrlAddEventHandler ["ButtonClick", "[] execVM format['%1\action_recoverInsuredVehicle.sqf', MF_Insurance_Base_Path];"];
+	(_dialog displayCtrl MF_Insurance_idcBtnPay) ctrlAddEventHandler ["ButtonClick", "[] execVM format['%1\action_makePayment.sqf', MF_Insurance_Base_Path];"];
 };
 
 // Show the common controls 
