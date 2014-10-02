@@ -33,7 +33,7 @@ _dialog closeDisplay 9000;
 
 // Check if the player has enough money in their inventory to insure the vehicle
 if( ({_x == _insuranceCurrencyClassname} count (magazines _player)) >= _insuranceCurrencyQty) then {
-	private ["r_interrupt", "_animState", "r_doLoop", "_started", "_finished", "_isMedic", "_isInsuring"];
+	private ["_animState", "_started", "_finished", "_isMedic", "_isInsuring"];
 
 	_isInsuring = _vehicleObj getVariable["MF_Insurance_PlayerIsInsuring", 0];
 
